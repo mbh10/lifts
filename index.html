@@ -50,10 +50,11 @@
 
   <section id="workoutScreen" class="hidden">
     <h1 id="workoutTitle"></h1>
+    <div id="restTimer" class="rest-timer" aria-live="polite">REST: 60s</div>
     <div id="exerciseList"></div>
     <button id="finishWorkout" class="primary-button">Finish Workout</button>
     <button class="outline-button report-button">View Progress Report</button>
-    <p class="helper-text">Warmups appear first and do not affect progression. Tap a red working-set button once to mark it complete. Tap again to reduce reps.</p>
+    <p class="helper-text">Tap each warmup button when complete. The rest timer starts after every completed warmup or working set. Warmups do not affect progression. Tap a red working-set button once to mark it complete. Tap again to reduce reps.</p>
   </section>
 
   <section id="completionScreen" class="hidden">
@@ -81,6 +82,11 @@
   <section id="settingsScreen" class="hidden">
     <h1>Settings</h1>
     <p class="helper-text">Each exercise can have its own working weight, increment, A/B assignment, set and rep target, and warmup routine.</p>
+    <div class="settings-card global-settings-card">
+      <h2>Workout Timer</h2>
+      <label>Rest Timer Seconds<input id="restTimerSeconds" type="number" min="0" max="600" step="5" value="60"></label>
+      <p class="helper-text">The timer starts after every completed warmup or working set. Enter 0 to turn it off.</p>
+    </div>
     <div id="settingsExerciseList"></div>
     <button id="addExerciseButton" class="primary-button">Add Exercise</button>
     <button id="saveSettingsButton" class="outline-button">Save All Changes</button>
