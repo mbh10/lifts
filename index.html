@@ -6,7 +6,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Lifts">
   <title>Lifts</title>
-  <link rel="stylesheet" href="assets/css/styles.css?v=5.0.0">
+  <link rel="stylesheet" href="assets/css/styles.css?v=5.1.0">
 </head>
 <body>
 <div class="app">
@@ -49,8 +49,13 @@
   </section>
 
   <section id="workoutScreen" class="hidden">
-    <h1 id="workoutTitle"></h1>
-    <div id="restTimer" class="rest-timer" aria-live="polite">REST: 60s</div>
+    <div class="workout-sticky-header">
+      <h1 id="workoutTitle"></h1>
+      <div id="restTimer" class="rest-timer" aria-live="polite">
+        <div id="restTimerTitle" class="rest-timer-title">Ready to Lift</div>
+        <div id="restTimerValue" class="rest-timer-value"></div>
+      </div>
+    </div>
     <div id="exerciseList"></div>
     <button id="finishWorkout" class="primary-button">Finish Workout</button>
     <button class="outline-button report-button">View Progress Report</button>
@@ -97,6 +102,6 @@
     </div>
   </section>
 </div>
-<script type="module" src="src/app.js?v=5.0.0"></script>
+<script type="module" src="src/app.js?v=5.1.0"></script>
 </body>
 </html>
