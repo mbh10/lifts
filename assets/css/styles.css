@@ -2,3 +2,51 @@
 
 .rest-timer{margin:-14px 0 24px;text-align:center;font-size:42px;font-weight:800;letter-spacing:.5px}.warmup-set-list{display:grid;gap:7px}.warmup-button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:48px;padding:10px 12px;border:2px solid #111;border-radius:6px;background:#d92020;color:#fff;font-size:16px;cursor:pointer;touch-action:manipulation}.warmup-button.completed{background:#16833b}.warmup-button .warmup-weight{font-weight:bold}.global-settings-card{margin-bottom:18px}.global-settings-card h2{margin:0 0 8px}
 @media(max-width:480px){.rest-timer{font-size:36px;margin-top:-12px}}
+
+/* V5.1 sticky workout header and coach-style rest timer */
+.app-header{
+  position:sticky;
+  top:0;
+  z-index:1100;
+  background:#fff;
+}
+.workout-sticky-header{
+  position:sticky;
+  top:58px;
+  z-index:1000;
+  margin:-10px -4px 18px;
+  padding:14px 4px 12px;
+  background:#fff;
+  border-bottom:3px solid #111;
+}
+.workout-sticky-header h1{
+  margin:0 0 8px;
+}
+.rest-timer{
+  margin:0;
+  min-height:94px;
+  text-align:center;
+  letter-spacing:0;
+}
+.rest-timer-title{
+  font-size:28px;
+  font-weight:800;
+  line-height:1.15;
+}
+.rest-timer-value{
+  min-height:42px;
+  margin-top:4px;
+  font-size:34px;
+  font-weight:800;
+  line-height:1.1;
+}
+.rest-timer[data-state="ready"] .rest-timer-title{color:#222}
+.rest-timer[data-state="running"] .rest-timer-title,
+.rest-timer[data-state="running"] .rest-timer-value{color:#111}
+.rest-timer[data-state="done"] .rest-timer-title,
+.rest-timer[data-state="done"] .rest-timer-value{color:#16833b}
+@media(max-width:480px){
+  .workout-sticky-header{top:60px;margin-left:-16px;margin-right:-16px;padding-left:16px;padding-right:16px}
+  .rest-timer-title{font-size:27px}
+  .rest-timer-value{font-size:32px}
+}
