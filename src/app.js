@@ -45,11 +45,11 @@ function dayExercises(day){return exerciseConfig.filter(e=>e.active&&e.templates
 async function showWorkout(){
  hideScreens();$('workoutScreen').classList.remove('hidden');
  const day=settings.next_workout||'A',items=dayExercises(day);$('workoutTitle').textContent=`${day} Day`;
- if(!items.length){$('exerciseList').innerHTML='<p>No exercises are assigned to this day. Open Settings to add one.</p>';updateRestTimerDisplay(Number(settings.rest_seconds??60));return;}
+ if(!items.length){$('exerciseList').innerHTML='<p>No exercises are assigned to this day. Open Settings to add one.</p>';showReadyState();return;}
  const cloud=await loadActiveWorkout(session.user.id);
  if(cloud&&cloud.workout_day===day&&cloud.workout_state?.version===4)activeWorkout=cloud.workout_state;
  else{
-  activeWorkout={version:4,day,startedDate:localDate(),restTimerEnd:null,items:{}};
+  activeWorkout={version:4,day,startedDate:localDate(),restTimerEnd:null,restTimerFinished:false,items:{}};
   items.forEach(e=>{
    const t=e.templates.find(x=>x.workout_day===day),warmupSets=[];
    (e.warmups||[]).forEach(w=>{const weight=roundToIncrement(Number(e.current_weight)*(Number(w.weight_percentage)/100),Number(e.weight_increment));for(let n=0;n<Number(w.warmup_sets);n++)warmupSets.push({status:'ready',reps:Number(w.warmup_reps),percentage:Number(w.weight_percentage),weight});});
@@ -61,10 +61,18 @@ async function showWorkout(){
 }
 function roundToIncrement(value,increment){return Math.round(value/increment)*increment;}
 function configuredRestSeconds(){const value=Number(settings?.rest_seconds??60);return Number.isFinite(value)?Math.max(0,Math.min(600,Math.round(value))):60;}
-function updateRestTimerDisplay(seconds){$('restTimer').textContent=`REST: ${Math.max(0,Math.ceil(seconds))}s`;}
+function formatTimer(seconds){const total=Math.max(0,Math.ceil(seconds)),minutes=Math.floor(total/60),remaining=total%60;return `${String(minutes).padStart(2,'0')}:${String(remaining).padStart(2,'0')}`;}
+function setRestDisplay(title,value='',state='ready'){$('restTimerTitle').textContent=title;$('restTimerValue').textContent=value;$('restTimer').dataset.state=state;}
 function stopRestTimer(){if(restTimerInterval){clearInterval(restTimerInterval);restTimerInterval=null;}}
-function resumeRestTimer(){stopRestTimer();const configured=configuredRestSeconds();if(!activeWorkout?.restTimerEnd){updateRestTimerDisplay(configured);return;}const tick=()=>{const remaining=Math.max(0,Math.ceil((new Date(activeWorkout.restTimerEnd).getTime()-Date.now())/1000));updateRestTimerDisplay(remaining);if(remaining<=0){stopRestTimer();activeWorkout.restTimerEnd=null;updateRestTimerDisplay(configured);saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout).catch(()=>{});}};tick();if(activeWorkout.restTimerEnd)restTimerInterval=setInterval(tick,250);}
-async function startRestTimer(){const seconds=configuredRestSeconds();stopRestTimer();activeWorkout.restTimerEnd=seconds>0?new Date(Date.now()+seconds*1000).toISOString():null;updateRestTimerDisplay(seconds);await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);if(seconds>0)resumeRestTimer();}
+let audioContext=null;
+function unlockAudio(){try{audioContext=audioContext||new (window.AudioContext||window.webkitAudioContext)();if(audioContext.state==='suspended')audioContext.resume();}catch(_){}}
+function playDing(){try{unlockAudio();if(!audioContext)return;const now=audioContext.currentTime,osc=audioContext.createOscillator(),gain=audioContext.createGain();osc.type='sine';osc.frequency.setValueAtTime(880,now);osc.frequency.exponentialRampToValueAtTime(1320,now+.12);gain.gain.setValueAtTime(.0001,now);gain.gain.exponentialRampToValueAtTime(.35,now+.015);gain.gain.exponentialRampToValueAtTime(.0001,now+.8);osc.connect(gain);gain.connect(audioContext.destination);osc.start(now);osc.stop(now+.82);}catch(_){}}
+function getNextSetLabel(){if(!activeWorkout)return '';for(const ex of dayExercises(activeWorkout.day)){const item=activeWorkout.items[ex.id];if(!item)continue;const warmIndex=(item.warmupSets||[]).findIndex(s=>s.status!=='completed');if(warmIndex>=0)return `${ex.name} · Warmup ${warmIndex+1} of ${item.warmupSets.length}`;const setIndex=(item.workingSets||[]).findIndex(s=>s.status==='ready');if(setIndex>=0)return `${ex.name} · Set ${setIndex+1} of ${item.workingSets.length}`;}return 'Workout complete';}
+function showReadyState(){setRestDisplay('Ready to Lift','','ready');}
+function showNextSet(){setRestDisplay('Next Set',getNextSetLabel(),'done');playDing();if(navigator.vibrate)navigator.vibrate(200);}
+function resumeRestTimer(){stopRestTimer();if(!activeWorkout?.restTimerEnd){if(activeWorkout?.restTimerFinished)showNextSetWithoutSound();else showReadyState();return;}const tick=()=>{const remaining=Math.max(0,Math.ceil((new Date(activeWorkout.restTimerEnd).getTime()-Date.now())/1000));setRestDisplay('Take a Break',formatTimer(remaining),'running');if(remaining<=0){stopRestTimer();activeWorkout.restTimerEnd=null;activeWorkout.restTimerFinished=true;showNextSet();saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout).catch(()=>{});}};tick();if(activeWorkout.restTimerEnd)restTimerInterval=setInterval(tick,250);}
+function showNextSetWithoutSound(){setRestDisplay('Next Set',getNextSetLabel(),'done');}
+async function startRestTimer(){unlockAudio();const seconds=configuredRestSeconds();stopRestTimer();activeWorkout.restTimerFinished=false;activeWorkout.restTimerEnd=seconds>0?new Date(Date.now()+seconds*1000).toISOString():null;if(seconds>0)setRestDisplay('Take a Break',formatTimer(seconds),'running');else showNextSet();await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);if(seconds>0)resumeRestTimer();}
 
 function renderWorkout(){
  const list=$('exerciseList');list.innerHTML='';
@@ -77,13 +85,13 @@ function renderWorkout(){
   (item.warmupSets||[]).forEach(state=>{
    const b=document.createElement('button');b.type='button';b.className=`warmup-button ${state.status==='completed'?'completed':''}`;
    b.innerHTML=`<span>${formatWeight(state.reps)} reps at ${formatWeight(state.percentage)}%</span><span class="warmup-weight">${formatWeight(state.weight)} lb</span>`;
-   b.addEventListener('click',async()=>{const completedNow=state.status!=='completed';state.status=completedNow?'completed':'ready';b.classList.toggle('completed',completedNow);if(completedNow)await startRestTimer();else await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);});
+   b.addEventListener('click',async()=>{unlockAudio();const completedNow=state.status!=='completed';state.status=completedNow?'completed':'ready';b.classList.toggle('completed',completedNow);if(completedNow)await startRestTimer();else await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);});
    warmList.append(b);
   });
   const setList=card.querySelector('.set-list');
   item.workingSets.forEach(state=>{
    const b=document.createElement('button');b.type='button';b.className=`rep-button ${state.status==='completed'?'completed':state.status==='failed'?'failed':''}`;b.textContent=state.currentReps;
-   b.addEventListener('click',async()=>{let completedNow=false;if(state.status==='ready'){state.status='completed';completedNow=true;}else if(state.status==='completed'){state.status='failed';state.currentReps=item.reps-1;}else if(state.currentReps>0)state.currentReps--;else{state.status='ready';state.currentReps=item.reps;}b.className=`rep-button ${state.status==='completed'?'completed':state.status==='failed'?'failed':''}`;b.textContent=state.currentReps;if(completedNow)await startRestTimer();else await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);});
+   b.addEventListener('click',async()=>{unlockAudio();let completedNow=false;if(state.status==='ready'){state.status='completed';completedNow=true;}else if(state.status==='completed'){state.status='failed';state.currentReps=item.reps-1;}else if(state.currentReps>0)state.currentReps--;else{state.status='ready';state.currentReps=item.reps;}b.className=`rep-button ${state.status==='completed'?'completed':state.status==='failed'?'failed':''}`;b.textContent=state.currentReps;if(completedNow)await startRestTimer();else await saveActiveWorkout(session.user.id,activeWorkout.day,activeWorkout);});
    setList.append(b);
   });
   list.append(card);
