@@ -9,7 +9,23 @@ function showStatus(message,error=false){const b=$('statusMessage');b.textConten
 function clearStatus(){$('statusMessage').classList.add('hidden');}
 function busy(button,on,text='Working...'){button.disabled=on;if(on){button.dataset.old=button.textContent;button.textContent=text}else button.textContent=button.dataset.old||button.textContent;}
 
-$('signInButton').addEventListener('click',async()=>authAction($('signInButton'),()=>signIn($('authEmail').value.trim(),$('authPassword').value),'Signing In...'));
+$('signInButton').addEventListener('click',async()=>{
+ const button=$('signInButton');
+ clearStatus();
+ const email=$('authEmail').value.trim(),password=$('authPassword').value;
+ if(!email||password.length<6)return showStatus('Enter a valid email and a password of at least 6 characters.',true);
+ busy(button,true,'Signing In...');
+ try{
+  const data=await signIn(email,password);
+  session=data.session||null;
+  if(!session)throw new Error('Sign in did not return a session.');
+  await route();
+ }catch(error){
+  showStatus(error.message||'Could not sign in.',true);
+ }finally{
+  busy(button,false);
+ }
+});
 $('signUpButton').addEventListener('click',async()=>authAction($('signUpButton'),async()=>{const d=await signUp($('authEmail').value.trim(),$('authPassword').value);if(!d.session)showStatus('Account created. Check your email and tap the confirmation link.');return d;},'Creating...'));
 $('forgotPasswordButton').addEventListener('click',async()=>{const email=$('authEmail').value.trim();if(!email)return showStatus('Enter your email address first.',true);try{await sendPasswordReset(email);showStatus('Password reset email sent.');}catch(e){showStatus(e.message,true);}});
 $('signOutButton').addEventListener('click',signOut);$('saveNewPassword').addEventListener('click',async()=>{const p=$('newPassword').value;if(p.length<6)return showStatus('Password must be at least 6 characters.',true);try{await updatePassword(p);recoveryMode=false;await route();}catch(e){showStatus(e.message,true);}});
@@ -18,7 +34,7 @@ document.querySelectorAll('.report-button').forEach(b=>b.addEventListener('click
 $('headerSettingsButton').addEventListener('click',()=>showSettings(currentVisibleScreen()));$('addExerciseButton').addEventListener('click',addExerciseCard);$('saveSettingsButton').addEventListener('click',saveAllExerciseSettings);$('closeSettingsButton').addEventListener('click',()=>{hideScreens();$(settingsReturn).classList.remove('hidden');});$('resetApp').addEventListener('click',resetData);
 
 async function authAction(button,action,label){clearStatus();const email=$('authEmail').value.trim(),pass=$('authPassword').value;if(!email||pass.length<6)return showStatus('Enter a valid email and a password of at least 6 characters.',true);busy(button,true,label);try{await action();}catch(e){showStatus(e.message,true)}finally{busy(button,false)}}
-onAuthStateChange(async(event,newSession)=>{
+onAuthStateChange((event,newSession)=>{
  const previousUserId=session?.user?.id;
  session=newSession;
  if(event==='PASSWORD_RECOVERY'){
@@ -27,14 +43,12 @@ onAuthStateChange(async(event,newSession)=>{
   $('passwordScreen').classList.remove('hidden');
   return;
  }
- // Supabase commonly refreshes the access token when iOS wakes the page.
- // The user and app data have not changed, so keep the current screen visible.
  if(appBooted&&event==='TOKEN_REFRESHED'&&previousUserId===newSession?.user?.id)return;
- // Avoid repainting the app when Supabase repeats SIGNED_IN for the same session.
  if(appBooted&&event==='SIGNED_IN'&&previousUserId===newSession?.user?.id)return;
- // The initial page boot below performs the first route.
  if(!appBooted&&event==='INITIAL_SESSION')return;
- await route();
+ // Do not perform Supabase database calls inside the auth callback.
+ // Deferring routing prevents Safari/Supabase auth callback deadlocks.
+ setTimeout(()=>{route().catch(error=>showStatus(`Could not load the app: ${error.message}`,true));},0);
 });
 
 async function route(){clearStatus();hideScreens();session=session||(await getSession());$('appHeader').classList.toggle('hidden',!session);if(!session){$('authScreen').classList.remove('hidden');return;}$('userEmail').textContent=session.user.email||'';if(recoveryMode){$('passwordScreen').classList.remove('hidden');return;}try{showStatus('Loading your fitness data...');settings=await loadSettings(session.user.id);if(!settings.weights||Object.keys(settings.weights).length===0){clearStatus();$('setupScreen').classList.remove('hidden');return;}exerciseConfig=await ensureDefaultExerciseConfig(session.user.id,settings);history=await loadWorkoutHistory(session.user.id);bodyWeights=await loadBodyWeights(session.user.id);clearStatus();if(settings.workout_count>0&&settings.workout_count%18===0){const lw=history.at(-1),lb=bodyWeights.at(-1);if((lb?new Date(lb.recorded_at).getTime():0)<=(lw?new Date(lw.completed_at).getTime():0))await promptBodyWeight('18_workouts');}if(settings.last_completed_workout_date===localDate())showCompletion();else await showWorkout();}catch(e){showStatus(`Could not load the app: ${e.message}`,true);}}
@@ -202,6 +216,15 @@ async function saveAllExerciseSettings(){const items=readSettingsCards(),error=v
 ${onlyDay} Day is the only configured workout. The app will repeat ${onlyDay} Day until exercises are added to the other day.`;}if(!confirm('Save the rest timer, exercise, progression, set, rep, and warmup settings?'+scheduleNotice))return;try{showStatus('Saving settings...');exerciseConfig=await saveExerciseConfig(session.user.id,items);const nextDay=resolveScheduledDay(settings.next_workout);settings=await saveSettings(session.user.id,{rest_seconds:restSeconds,next_workout:nextDay||settings.next_workout});await deleteActiveWorkout(session.user.id);activeWorkout=null;clearStatus();alert(`Settings saved. ${nextDay?nextDay+' Day will be next.':'Add an exercise to A Day or B Day before starting a workout.'}`);showSettings(settingsReturn);}catch(e){showStatus(`Could not save settings: ${e.message}`,true);}}
 async function resetData(){if(!confirm('Open reset options? Nothing will be erased yet.'))return;if(prompt('Type RESET to permanently erase your cloud fitness data.')!=='RESET')return alert('Nothing was erased.');if(!confirm('Final warning: erase all cloud workout, body-weight, and exercise configuration data?'))return;await deleteAllUserData(session.user.id);await route();}
 function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}function escapeAttr(v){return escapeHtml(v);}
+window.addEventListener('error',event=>{
+ console.error(event.error||event.message);
+ showStatus(`App error: ${event.message||'Unknown error'}`,true);
+});
+window.addEventListener('unhandledrejection',event=>{
+ console.error(event.reason);
+ showStatus(`App error: ${event.reason?.message||event.reason||'Unknown error'}`,true);
+});
+
 async function bootApp(){
  try{
   session=await getSession();
