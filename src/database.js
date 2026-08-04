@@ -78,5 +78,10 @@ export async function saveCompletedWorkout({userId,workoutNumber,workoutDate,wor
  await saveSettings(userId,settingsChanges);await deleteActiveWorkout(userId);return workout;
 }
 
+export async function deleteWorkout(userId,workoutId){
+ const{error}=await supabase.from('workouts').delete().eq('id',workoutId).eq('user_id',userId);
+ if(error)throw error;
+}
+
 export async function deleteAllUserData(userId){const tables=['active_workouts','exercise_results','workouts','body_weight_history','warmup_steps','workout_template_exercises','exercises'];for(const table of tables){const{error}=await supabase.from(table).delete().eq('user_id',userId);if(error)throw error;}return saveSettings(userId,{current_body_weight:null,workout_count:0,next_workout:'A',weights:{},failure_counts:DEFAULT_FAILURE_COUNTS,last_completed_workout_date:null});}
 export function localDate(date=new Date()){return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`;}

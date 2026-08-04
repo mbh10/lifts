@@ -150,3 +150,9 @@
     font-size:31px;
   }
 }
+
+.history-header>div{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}
+.history-date{font-weight:normal;color:#555}
+.delete-workout-button{min-height:38px;padding:7px 11px;border:1px solid #b00020;border-radius:6px;background:#fff;color:#b00020;font-size:14px;cursor:pointer;flex:0 0 auto}
+.delete-workout-button:disabled{opacity:.55;cursor:not-allowed}
+@media(max-width:480px){.history-header{align-items:flex-start}.delete-workout-button{min-height:42px}}

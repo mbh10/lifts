@@ -49,3 +49,19 @@ Run `supabase/database-upgrade.sql` in the Supabase SQL Editor when setting up o
 - Charts and exports: `src/reports.js`
 
 After changing JavaScript or CSS, increase the version query in `index.html` from `v=5.0.0` to another value, such as `v=5.0.1`. This helps iPhone Safari load the newest files instead of an older cached copy.
+
+## Version 5.1
+Adds a sticky workout header, Take a Break MM:SS countdown, ding/vibration at zero, and a Next Set prompt naming the next warmup or working set. No database migration is required.
+
+
+## V5.3
+Progress Report workout cards now include a guarded Delete action. Deleting a workout removes it from reports and charts but does not roll back current progression settings.
+
+
+## Version 5.4
+Workout history can only be deleted newest-first. Deleting the latest workout restores exercise weights, failure counts, workout count, and the next A/B day to the state after the last remaining workout.
+
+
+## Version 5.5
+
+Fixes empty workout-day scheduling. If only A or B is configured, that day repeats. If neither day is configured, the app directs the user to Settings. Also adds duplicate exercise-name validation and safer exercise removal warnings.
