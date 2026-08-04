@@ -1,102 +1,47 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Lifts">
-  <title>Lifts</title>
-  <link rel="stylesheet" href="styles.css">
-</head>
-<body>
-<div class="app">
-  <header id="appHeader" class="app-header hidden">
-    <strong>Lifts</strong>
-    <div class="header-actions">
-      <button id="headerSettingsButton" class="link-button">Settings</button>
-      <span id="userEmail"></span>
-      <button id="signOutButton" class="link-button">Sign Out</button>
-    </div>
-  </header>
+import { supabase } from './supabase-client.js';
+import { APP_URL } from './config.js';
 
-  <div id="statusMessage" class="status hidden" aria-live="polite"></div>
+export async function getSession() {
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session;
+}
 
-  <section id="authScreen">
-    <h1>Lifts</h1>
-    <p class="helper-text centered">Sign in to save and sync your workout progress.</p>
-    <label>Email<input id="authEmail" type="email" autocomplete="email"></label>
-    <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="6"></label>
-    <button id="signInButton" class="primary-button">Sign In</button>
-    <button id="signUpButton" class="outline-button">Create Account</button>
-    <button id="forgotPasswordButton" class="link-button full">Forgot Password?</button>
-  </section>
+export function onAuthStateChange(callback) {
+  return supabase.auth.onAuthStateChange((event, session) => {
+    callback(event, session);
+  });
+}
 
-  <section id="passwordScreen" class="hidden">
-    <h1>Set New Password</h1>
-    <label>New Password<input id="newPassword" type="password" minlength="6"></label>
-    <button id="saveNewPassword" class="primary-button">Save New Password</button>
-  </section>
+export async function signUp(email, password) {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: APP_URL }
+  });
+  if (error) throw error;
+  return data;
+}
 
-  <section id="setupScreen" class="hidden">
-    <h1>Starting Information</h1>
-    <label>Current Body Weight<input id="bodyWeight" type="number" min="1" step="0.1" inputmode="decimal"></label>
-    <label>Squat<input id="squat" type="number" min="1" step="0.5"></label>
-    <label>Overhead Press<input id="overheadPress" type="number" min="1" step="0.5"></label>
-    <label>Barbell Row<input id="barbellRow" type="number" min="1" step="0.5"></label>
-    <label>Bench Press<input id="benchPress" type="number" min="1" step="0.5"></label>
-    <label>Deadlift<input id="deadlift" type="number" min="1" step="0.5"></label>
-    <button id="saveSetup" class="primary-button">Save Starting Information</button>
-  </section>
+export async function signIn(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw error;
+  return data;
+}
 
-  <section id="workoutScreen" class="hidden">
-    <h1 id="workoutTitle"></h1>
-    <div id="restTimer" class="rest-timer" aria-live="polite">REST: 60s</div>
-    <div id="exerciseList"></div>
-    <button id="finishWorkout" class="primary-button">Finish Workout</button>
-    <button class="outline-button report-button">View Progress Report</button>
-    <p class="helper-text">Tap each warmup button when complete. The rest timer starts after every completed warmup or working set. Warmups do not affect progression. Tap a red working-set button once to mark it complete. Tap again to reduce reps.</p>
-  </section>
+export async function signOut() {
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
+}
 
-  <section id="completionScreen" class="hidden">
-    <h1>Workout Logged</h1>
-    <p id="nextWorkoutMessage"></p>
-    <div id="completionSummary"></div>
-    <button id="advanceWorkout" class="primary-button"></button>
-    <button class="outline-button report-button">View Progress Report</button>
-  </section>
+export async function sendPasswordReset(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: APP_URL
+  });
+  if (error) throw error;
+}
 
-  <section id="reportScreen" class="hidden">
-    <h1>Progress Report</h1>
-    <div class="stats-grid">
-      <div class="stat-card"><span>Completed Workouts</span><strong id="totalWorkoutCount">0</strong></div>
-      <div class="stat-card"><span>Current Body Weight</span><strong id="currentBodyWeightDisplay">--</strong></div>
-    </div>
-    <label>Chart<select id="reportMetric"></select></label>
-    <div class="chart-wrap"><svg id="progressChart" viewBox="0 0 600 300"></svg><div id="chartMessage" hidden></div></div>
-    <div class="two-buttons"><button id="downloadCsv" class="outline-button">Download CSV</button><button id="updateBodyWeight" class="outline-button">Update Body Weight</button></div>
-    <h2>Recent Workouts</h2>
-    <div id="workoutHistoryList"></div>
-    <button id="closeReport" class="primary-button">Back</button>
-  </section>
-
-  <section id="settingsScreen" class="hidden">
-    <h1>Settings</h1>
-    <p class="helper-text">Each exercise can have its own working weight, increment, A/B assignment, set and rep target, and warmup routine.</p>
-    <div class="settings-card global-settings-card">
-      <h2>Workout Timer</h2>
-      <label>Rest Timer Seconds<input id="restTimerSeconds" type="number" min="0" max="600" step="5" value="60"></label>
-      <p class="helper-text">The timer starts after every completed warmup or working set. Enter 0 to turn it off.</p>
-    </div>
-    <div id="settingsExerciseList"></div>
-    <button id="addExerciseButton" class="primary-button">Add Exercise</button>
-    <button id="saveSettingsButton" class="outline-button">Save All Changes</button>
-    <button id="closeSettingsButton" class="outline-button">Back</button>
-    <div class="danger-zone">
-      <h2>Danger Zone</h2>
-      <button id="resetApp" class="secondary-button">Erase All Account Data</button>
-    </div>
-  </section>
-</div>
-<script type="module" src="app.js"></script>
-</body>
-</html>
+export async function updatePassword(password) {
+  const { error } = await supabase.auth.updateUser({ password });
+  if (error) throw error;
+}
