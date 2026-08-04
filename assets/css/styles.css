@@ -50,3 +50,103 @@
   .rest-timer-title{font-size:27px}
   .rest-timer-value{font-size:32px}
 }
+
+/* V5.2: prevent scrolling controls from showing through the frozen header */
+.app{
+  position:relative;
+  isolation:isolate;
+}
+
+.app-header{
+  position:sticky;
+  top:0;
+  z-index:3000;
+  min-height:58px;
+  margin:0 -20px 0;
+  padding:16px 20px;
+  background:#fff;
+  border-bottom:1px solid #ddd;
+  box-shadow:0 1px 0 #fff;
+}
+
+.workout-sticky-header{
+  position:sticky;
+  top:58px;
+  z-index:2500;
+  margin:0 -20px 24px;
+  padding:16px 20px 18px;
+  overflow:hidden;
+  background:#fff;
+  border-bottom:3px solid #111;
+  box-shadow:0 8px 0 #fff;
+  transform:translateZ(0);
+}
+
+/* Keep the day label compact so the coach prompt is the visual focus. */
+.workout-sticky-header h1{
+  margin:0 0 10px;
+  color:#555;
+  font-size:15px;
+  font-weight:700;
+  letter-spacing:.12em;
+  line-height:1;
+  text-align:center;
+  text-transform:uppercase;
+}
+
+.rest-timer{
+  min-height:78px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+}
+
+.rest-timer-title{
+  font-size:30px;
+  line-height:1.1;
+}
+
+.rest-timer-value{
+  min-height:36px;
+  margin-top:5px;
+  font-size:34px;
+}
+
+/* Explicitly keep workout controls below both sticky layers. */
+#exerciseList,
+.exercise-card,
+.warmup-block,
+.warmup-button,
+.rep-button{
+  position:relative;
+  z-index:1;
+}
+
+@media(max-width:480px){
+  .app-header{
+    margin-left:-16px;
+    margin-right:-16px;
+    padding-left:16px;
+    padding-right:16px;
+  }
+
+  .workout-sticky-header{
+    top:58px;
+    margin-left:-16px;
+    margin-right:-16px;
+    padding-left:16px;
+    padding-right:16px;
+  }
+
+  .workout-sticky-header h1{
+    font-size:14px;
+  }
+
+  .rest-timer-title{
+    font-size:27px;
+  }
+
+  .rest-timer-value{
+    font-size:31px;
+  }
+}
