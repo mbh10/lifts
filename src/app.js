@@ -1,5 +1,5 @@
 import {getSession,onAuthStateChange,signUp,signIn,signOut,sendPasswordReset,updatePassword} from './auth.js';
-import {DEFAULT_FAILURE_COUNTS,loadSettings,saveSettings,loadActiveWorkout,saveActiveWorkout,insertBodyWeight,loadBodyWeights,loadWorkoutHistory,saveCompletedWorkout,deleteAllUserData,localDate,ensureDefaultExerciseConfig,loadExerciseConfig,saveExerciseConfig} from './database.js';
+import {DEFAULT_FAILURE_COUNTS,loadSettings,saveSettings,loadActiveWorkout,saveActiveWorkout,insertBodyWeight,loadBodyWeights,loadWorkoutHistory,saveCompletedWorkout,deleteAllUserData,localDate,ensureDefaultExerciseConfig,loadExerciseConfig,saveExerciseConfig,deleteWorkout,deleteActiveWorkout} from './database.js';
 import {renderChart,renderHistory,downloadCsv,formatWeight} from './reports.js';
 
 let session=null,settings=null,exerciseConfig=[],activeWorkout=null,history=[],bodyWeights=[],reportReturn='workoutScreen',settingsReturn='workoutScreen',recoveryMode=false,restTimerInterval=null,appBooted=false;
@@ -14,7 +14,7 @@ $('signUpButton').addEventListener('click',async()=>authAction($('signUpButton')
 $('forgotPasswordButton').addEventListener('click',async()=>{const email=$('authEmail').value.trim();if(!email)return showStatus('Enter your email address first.',true);try{await sendPasswordReset(email);showStatus('Password reset email sent.');}catch(e){showStatus(e.message,true);}});
 $('signOutButton').addEventListener('click',signOut);$('saveNewPassword').addEventListener('click',async()=>{const p=$('newPassword').value;if(p.length<6)return showStatus('Password must be at least 6 characters.',true);try{await updatePassword(p);recoveryMode=false;await route();}catch(e){showStatus(e.message,true);}});
 $('saveSetup').addEventListener('click',saveSetup);$('finishWorkout').addEventListener('click',finishWorkout);$('advanceWorkout').addEventListener('click',async()=>{if(confirm(`Start ${settings.next_workout} Day now?`)){await saveSettings(session.user.id,{last_completed_workout_date:null});settings.last_completed_workout_date=null;await showWorkout();}});
-document.querySelectorAll('.report-button').forEach(b=>b.addEventListener('click',()=>showReport(b.closest('section').id)));$('closeReport').addEventListener('click',()=>{hideScreens();$(reportReturn).classList.remove('hidden');});$('reportMetric').addEventListener('change',drawReport);$('downloadCsv').addEventListener('click',()=>downloadCsv(history,exerciseMap()));$('updateBodyWeight').addEventListener('click',updateBodyWeight);
+document.querySelectorAll('.report-button').forEach(b=>b.addEventListener('click',()=>showReport(b.closest('section').id)));$('closeReport').addEventListener('click',route);$('reportMetric').addEventListener('change',drawReport);$('downloadCsv').addEventListener('click',()=>downloadCsv(history,exerciseMap()));$('updateBodyWeight').addEventListener('click',updateBodyWeight);
 $('headerSettingsButton').addEventListener('click',()=>showSettings(currentVisibleScreen()));$('addExerciseButton').addEventListener('click',addExerciseCard);$('saveSettingsButton').addEventListener('click',saveAllExerciseSettings);$('closeSettingsButton').addEventListener('click',()=>{hideScreens();$(settingsReturn).classList.remove('hidden');});$('resetApp').addEventListener('click',resetData);
 
 async function authAction(button,action,label){clearStatus();const email=$('authEmail').value.trim(),pass=$('authPassword').value;if(!email||pass.length<6)return showStatus('Enter a valid email and a password of at least 6 characters.',true);busy(button,true,label);try{await action();}catch(e){showStatus(e.message,true)}finally{busy(button,false)}}
@@ -105,7 +105,74 @@ async function promptBodyWeight(reason){const raw=prompt(`You have completed ${s
 async function updateBodyWeight(){await promptBodyWeight('manual');await showReport('reportScreen');}
 
 function exerciseMap(){return Object.fromEntries(exerciseConfig.flatMap(e=>[[e.id,e.name],[e.exercise_key,e.name]]));}
-async function showReport(from){if(from!=='reportScreen')reportReturn=from||'workoutScreen';hideScreens();$('reportScreen').classList.remove('hidden');history=await loadWorkoutHistory(session.user.id);bodyWeights=await loadBodyWeights(session.user.id);$('totalWorkoutCount').textContent=history.length;$('currentBodyWeightDisplay').textContent=`${formatWeight(settings.current_body_weight)} lb`;const select=$('reportMetric'),selected=select.value;select.innerHTML='<option value="bodyWeight">Body Weight</option>'+exerciseConfig.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');if([...select.options].some(o=>o.value===selected))select.value=selected;drawReport();renderHistory($('workoutHistoryList'),history,exerciseMap());}
+async function showReport(from){if(from!=='reportScreen')reportReturn=from||'workoutScreen';hideScreens();$('reportScreen').classList.remove('hidden');history=await loadWorkoutHistory(session.user.id);bodyWeights=await loadBodyWeights(session.user.id);$('totalWorkoutCount').textContent=history.length;$('currentBodyWeightDisplay').textContent=`${formatWeight(settings.current_body_weight)} lb`;const select=$('reportMetric'),selected=select.value;select.innerHTML='<option value="bodyWeight">Body Weight</option>'+exerciseConfig.map(e=>`<option value="${e.id}">${escapeHtml(e.name)}</option>`).join('');if([...select.options].some(o=>o.value===selected))select.value=selected;drawReport();renderHistory($('workoutHistoryList'),history,exerciseMap(),deleteWorkoutFromReport);}
+async function deleteWorkoutFromReport(workout){
+ const latestWorkout=history.at(-1);
+ if(!latestWorkout||workout.id!==latestWorkout.id){
+  alert('Workouts must be deleted in order. Delete the newest workout first.');
+  return;
+ }
+ const priorWorkout=history.length>1?history.at(-2):null;
+ const nextDayAfterDelete=priorWorkout?(priorWorkout.workout_day==='A'?'B':'A'):'A';
+ const confirmed=confirm(
+  `Delete Workout ${workout.workout_number} from ${workout.workout_date}?\n\n`+
+  `Your workout count will return to ${priorWorkout?priorWorkout.workout_number:0}, and ${nextDayAfterDelete} Day will be next. `+
+  'Current exercise weights and failure counts will be restored to the state after the last remaining workout.'
+ );
+ if(!confirmed)return;
+ const finalConfirmed=confirm('Final confirmation: permanently delete the newest workout and roll progress back one workout?');
+ if(!finalConfirmed)return;
+ try{
+  showStatus('Deleting workout and restoring progress...');
+  const deletedResults=workout.exercise_results||[];
+  await deleteWorkout(session.user.id,workout.id);
+  history=await loadWorkoutHistory(session.user.id);
+
+  const reversedHistory=[...history].reverse();
+  for(const exercise of exerciseConfig){
+   let previousResult=null;
+   for(const savedWorkout of reversedHistory){
+    previousResult=(savedWorkout.exercise_results||[]).find(result=>
+     (result.exercise_id&&result.exercise_id===exercise.id)||
+     (!result.exercise_id&&result.exercise_key===exercise.exercise_key)
+    );
+    if(previousResult)break;
+   }
+   if(previousResult){
+    exercise.current_weight=Number(previousResult.next_weight);
+    exercise.failure_count=Number(previousResult.failure_count_after||0);
+    continue;
+   }
+   const deletedResult=deletedResults.find(result=>
+    (result.exercise_id&&result.exercise_id===exercise.id)||
+    (!result.exercise_id&&result.exercise_key===exercise.exercise_key)
+   );
+   if(deletedResult){
+    exercise.current_weight=Number(deletedResult.weight);
+    exercise.failure_count=0;
+   }
+  }
+
+  exerciseConfig=await saveExerciseConfig(session.user.id,configForSave());
+  const latestRemaining=history.at(-1)||null;
+  settings=await saveSettings(session.user.id,{
+   workout_count:latestRemaining?Number(latestRemaining.workout_number):0,
+   next_workout:latestRemaining?(latestRemaining.workout_day==='A'?'B':'A'):'A',
+   last_completed_workout_date:latestRemaining?latestRemaining.workout_date:null
+  });
+  await deleteActiveWorkout(session.user.id);
+  sessionStorage.removeItem('lastSummary');
+  $('totalWorkoutCount').textContent=history.length;
+  drawReport();
+  renderHistory($('workoutHistoryList'),history,exerciseMap(),deleteWorkoutFromReport);
+  showStatus(`Workout deleted. ${settings.next_workout} Day is now next.`);
+  setTimeout(clearStatus,3000);
+ }catch(error){
+  alert(`Could not delete the workout: ${error.message}`);
+  await route();
+ }
+}
+
 function drawReport(){renderChart($('progressChart'),$('chartMessage'),$('reportMetric').value,history,bodyWeights,exerciseMap());}
 
 function currentVisibleScreen(){return screens.find(id=>!$(id).classList.contains('hidden'))||'workoutScreen';}
